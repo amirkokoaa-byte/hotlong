@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { PhoneCall, UserCheck, Columns, Settings, Server, ShieldCheck } from 'lucide-react';
 import { SystemConfig, ActiveCallState } from './types';
 import { storageService, DEFAULT_CONFIG } from './services/storage';
 import { socketService } from './services/socket';
@@ -43,8 +44,9 @@ function HotlineAppContent() {
 
   // Current hotline ID identifier for PeerJS (e.g. HOTLINE_12345 or sanitized hotlineDisplayNumber)
   const hotlineId = useMemo(() => {
-    return 'HOTLINE_' + (config.hotlineDisplayNumber ? config.hotlineDisplayNumber.replace(/[^a-zA-Z0-9]/g, '') : '12345');
-  }, [config.hotlineDisplayNumber]);
+    const num = config?.hotlineDisplayNumber || DEFAULT_CONFIG.hotlineDisplayNumber;
+    return 'HOTLINE_' + (num ? num.replace(/[^a-zA-Z0-9]/g, '') : '12345');
+  }, [config?.hotlineDisplayNumber]);
 
   // Load initial config from REST API and Local Storage
   useEffect(() => {
@@ -54,16 +56,16 @@ function HotlineAppContent() {
         if (res.ok) {
           const remoteConfig = await res.json();
           const localConfig = await storageService.getConfig();
-          const merged = { ...DEFAULT_CONFIG, ...localConfig, ...remoteConfig };
+          const merged = { ...DEFAULT_CONFIG, ...(localConfig || {}), ...(remoteConfig || {}) };
           setConfig(merged);
           await storageService.saveConfig(merged);
         } else {
           const localConfig = await storageService.getConfig();
-          setConfig(localConfig);
+          setConfig(localConfig || DEFAULT_CONFIG);
         }
       } catch {
         const localConfig = await storageService.getConfig();
-        setConfig(localConfig);
+        setConfig(localConfig || DEFAULT_CONFIG);
       }
     };
 
@@ -72,6 +74,9 @@ function HotlineAppContent() {
 
   // Sync PeerJS on role / route
   useEffect(() => {
+    if (config) {
+      peerService.applyTurnConfig(config);
+    }
     const isAgent = location.pathname.startsWith('/agent') || isSplitViewOpen;
 
     if (isAgent) {
@@ -87,7 +92,7 @@ function HotlineAppContent() {
           setIncomingCall({
             callId,
             callerId,
-            hotlineNumber: config.hotlineDisplayNumber,
+            hotlineNumber: config?.hotlineDisplayNumber || DEFAULT_CONFIG.hotlineDisplayNumber,
             timestamp: Date.now(),
             peerCall: mediaConn,
           });
@@ -105,7 +110,7 @@ function HotlineAppContent() {
       // Customer PeerJS init
       peerService.initializePeer().catch(() => {});
     }
-  }, [location.pathname, isSplitViewOpen, hotlineId, config.hotlineDisplayNumber]);
+  }, [location.pathname, isSplitViewOpen, hotlineId, config]);
 
   // Setup Real-time Signaling via Socket.io / BroadcastChannel
   useEffect(() => {
@@ -113,16 +118,16 @@ function HotlineAppContent() {
     const isAgent = location.pathname.startsWith('/agent') || isSplitViewOpen;
     const activeRole = isAgent ? 'agent' : 'customer';
 
-    socketService.setRole(activeRole, { name: agentName, hotline: config.hotlineDisplayNumber });
+    socketService.setRole(activeRole, { name: agentName, hotline: config?.hotlineDisplayNumber || DEFAULT_CONFIG.hotlineDisplayNumber });
 
     // Handle System Status
     socket.on('system-status', (status: { onlineAgents: number; hotlineNumber: string; companyName: string }) => {
-      setOnlineAgentsCount(status.onlineAgents || 1);
-      if (status.hotlineNumber) {
+      setOnlineAgentsCount(status?.onlineAgents || 1);
+      if (status?.hotlineNumber || status?.companyName) {
         setConfig((prev) => ({
-          ...prev,
-          hotlineDisplayNumber: status.hotlineNumber,
-          companyName: status.companyName || prev.companyName,
+          ...(prev || DEFAULT_CONFIG),
+          hotlineDisplayNumber: status.hotlineNumber || prev?.hotlineDisplayNumber || DEFAULT_CONFIG.hotlineDisplayNumber,
+          companyName: status.companyName || prev?.companyName || DEFAULT_CONFIG.companyName,
         }));
       }
     });
@@ -416,9 +421,94 @@ function HotlineAppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0F172A] font-sans antialiased text-slate-100 selection:bg-blue-500 selection:text-white" id="cloud-hotline-app-root">
-      {/* If Dual Screen Split View is enabled */}
-      {isSplitViewOpen ? (
+    <div className="min-h-screen bg-[#0F172A] font-sans antialiased text-slate-100 selection:bg-blue-500 selection:text-white flex flex-col" id="cloud-hotline-app-root">
+      
+      {/* Top Global Navigation Bar */}
+      <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 text-white px-4 sm:px-6 py-2.5 flex flex-wrap justify-between items-center gap-3 z-30 sticky top-0 shadow-lg" id="global-hotline-header">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+            <PhoneCall className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-white">سيرفر الهوت لاين السحابي (VoIP)</span>
+              {config?.turnEnabled && (
+                <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] font-mono flex items-center gap-1">
+                  <Server className="w-2.5 h-2.5" /> Coturn TURN
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400">
+              {config?.companyName || DEFAULT_CONFIG.companyName} | هوت لاين: <span className="font-mono text-blue-400 font-bold">{config?.hotlineDisplayNumber || DEFAULT_CONFIG.hotlineDisplayNumber}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-2">
+          <div className="flex bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+            <button
+              onClick={() => {
+                setIsSplitViewOpen(false);
+                navigate('/');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                !isSplitViewOpen && location.pathname === '/'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              id="nav-customer-tab"
+            >
+              <PhoneCall className="w-3.5 h-3.5" />
+              واجهة العميل
+            </button>
+
+            <button
+              onClick={() => {
+                setIsSplitViewOpen(false);
+                navigate('/agent');
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                !isSplitViewOpen && location.pathname.startsWith('/agent')
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              id="nav-agent-tab"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              لوحة موظفي الخدمة
+            </button>
+
+            <button
+              onClick={() => setIsSplitViewOpen(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                isSplitViewOpen
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              id="nav-splitview-tab"
+            >
+              <Columns className="w-3.5 h-3.5" />
+              محاكاة مزدوجة (Split-View)
+            </button>
+          </div>
+
+          {/* Admin & Coturn Settings Button */}
+          <button
+            onClick={() => setIsAdminSettingsOpen(true)}
+            title="Admin & Coturn Settings (Master Password: 0000)"
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-amber-300 hover:text-amber-200 transition"
+            id="nav-admin-settings-btn"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col">
+        {/* If Dual Screen Split View is enabled */}
+        {isSplitViewOpen ? (
         <SplitViewTesting
           config={config}
           agentName={agentName}
@@ -515,6 +605,7 @@ function HotlineAppContent() {
           />
         </Routes>
       )}
+      </main>
 
       {/* Admin Settings Modal (Master Password: 0000) */}
       <AdminSettingsModal

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Key, Phone, Building2, MessageSquare, Check, X, ShieldAlert, Lock, RotateCcw, Plus, Trash2, Building, UserPlus, UserCheck } from 'lucide-react';
+import { Settings, Key, Phone, Building2, MessageSquare, Check, X, ShieldAlert, Lock, RotateCcw, Plus, Trash2, Building, UserPlus, UserCheck, Server, Radio, Activity, Globe } from 'lucide-react';
 import { SystemConfig, CompanyProfile, AgentAccount } from '../types';
 import { DEFAULT_CONFIG, DEFAULT_COMPANIES } from '../services/storage';
+import { peerService } from '../services/peerService';
 
 interface AdminSettingsModalProps {
   isOpen: boolean;
@@ -22,6 +23,10 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   const [authError, setAuthError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // ICE / TURN test state
+  const [isTestingTurn, setIsTestingTurn] = useState(false);
+  const [turnTestResult, setTurnTestResult] = useState<{ success: boolean; message: string; candidates: string[] } | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<SystemConfig>({ ...config });
@@ -49,6 +54,77 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
       setCompanies(DEFAULT_COMPANIES);
     }
   }, [isOpen]);
+
+  const handleTestTurnServer = async () => {
+    setIsTestingTurn(true);
+    setTurnTestResult(null);
+
+    const candidates: string[] = [];
+    const host = formData.turnServerIp?.trim() || 'stun.l.google.com';
+    const port = formData.turnPort?.trim() || '3478';
+    const username = formData.turnUsername?.trim();
+    const credential = formData.turnCredential?.trim();
+
+    const iceServers: RTCIceServer[] = [
+      { urls: 'stun:stun.l.google.com:19302' }
+    ];
+
+    if (formData.turnServerIp) {
+      iceServers.push({ urls: `stun:${host}:${port}` });
+      if (username && credential) {
+        iceServers.push({
+          urls: `turn:${host}:${port}?transport=udp`,
+          username,
+          credential,
+        });
+      }
+    }
+
+    try {
+      const pc = new RTCPeerConnection({ iceServers });
+      pc.createDataChannel('test');
+      
+      const gatherTimeout = setTimeout(() => {
+        pc.close();
+        setIsTestingTurn(false);
+        setTurnTestResult({
+          success: candidates.length > 0,
+          message: candidates.length > 0
+            ? `تم الاتصال بنجاح وتوليد ${candidates.length} مرشح ICE!`
+            : 'لم يتم استلام مرشحات (Candidates). يرجى التأكد من الـ IP والمنافذ المفتوحة.',
+          candidates,
+        });
+      }, 3500);
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          const type = event.candidate.type || 'candidate';
+          const address = event.candidate.address || (event.candidate as any).ip || event.candidate.candidate.split(' ')[4] || 'detected';
+          const str = `${type.toUpperCase()} (${event.candidate.protocol || 'udp'}): ${address}`;
+          candidates.push(str);
+        } else {
+          clearTimeout(gatherTimeout);
+          pc.close();
+          setIsTestingTurn(false);
+          setTurnTestResult({
+            success: candidates.length > 0,
+            message: `نجاح الاتصال! تم التقاط ${candidates.length} مرشح للاتصال المباشر والـ Relay.`,
+            candidates,
+          });
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+    } catch (err: any) {
+      setIsTestingTurn(false);
+      setTurnTestResult({
+        success: false,
+        message: 'خطأ في تهيئة WebRTC: ' + (err.message || String(err)),
+        candidates: [],
+      });
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -448,6 +524,120 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Coturn / TURN / STUN Server Configuration Section */}
+            <div className="space-y-4 bg-[#0F172A] p-4 rounded-xl border border-slate-700">
+              <div className="flex items-center justify-between">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.turnEnabled || false}
+                    onChange={(e) => setFormData({ ...formData, turnEnabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                  <span className="mr-2 text-xs font-semibold text-slate-300">تفعيل سيرفر TURN المخصص</span>
+                </label>
+
+                <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>إعدادات خادم السحابة Coturn (STUN / TURN)</span>
+                  <Server className="w-4 h-4" />
+                </h3>
+              </div>
+
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                يُستخدم خادم الـ Coturn لتجاوز جدران الحماية (NAT/Firewall Traversal) وضمان استقرار المكالمات الصوتية عبر السحابة والشبكات المعقدة.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    عنوان السيرفر أو الـ IP (VPS Host / IP):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="مثال: 194.163.150.22 أو turn.mydomain.com"
+                    value={formData.turnServerIp || ''}
+                    onChange={(e) => setFormData({ ...formData, turnServerIp: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white font-mono text-left"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    منفذ السيرفر (Port):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="3478 (أو 5349 للـ TLS)"
+                    value={formData.turnPort || '3478'}
+                    onChange={(e) => setFormData({ ...formData, turnPort: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white font-mono text-center"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    اسم مستخدم Coturn (Username):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="مثال: hotline_user"
+                    value={formData.turnUsername || ''}
+                    onChange={(e) => setFormData({ ...formData, turnUsername: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white font-mono text-left"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                    كلمة سر Coturn (Password / Credential):
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="••••••••••••"
+                    value={formData.turnCredential || ''}
+                    onChange={(e) => setFormData({ ...formData, turnCredential: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs text-white font-mono text-center"
+                  />
+                </div>
+              </div>
+
+              {/* Live ICE / Coturn Connection Tester */}
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleTestTurnServer}
+                  disabled={isTestingTurn}
+                  className="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-cyan-500/30 text-cyan-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+                >
+                  <Radio className={`w-3.5 h-3.5 ${isTestingTurn ? 'animate-pulse text-cyan-400' : ''}`} />
+                  {isTestingTurn ? 'جاري فحص الاتصال بسيرفر TURN...' : 'اختبار وفحص خادم Coturn'}
+                </button>
+
+                {turnTestResult && (
+                  <div
+                    className={`text-xs px-3 py-1.5 rounded-lg border flex items-center gap-1.5 ${
+                      turnTestResult.success
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                        : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                    }`}
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>{turnTestResult.message}</span>
+                  </div>
+                )}
+              </div>
+
+              {turnTestResult && turnTestResult.candidates.length > 0 && (
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] font-mono text-slate-300 max-h-24 overflow-y-auto">
+                  <div className="text-slate-400 font-bold mb-1">ICE Candidates Detected:</div>
+                  {turnTestResult.candidates.map((c, i) => (
+                    <div key={i} className="text-cyan-400">✓ {c}</div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* General Security & Passwords */}

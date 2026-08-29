@@ -24,6 +24,12 @@ export interface SystemConfig {
   masterPassword: string;
   workingHours: string;
   supportEmail: string;
+  // Coturn / TURN / STUN Server Settings
+  turnServerIp?: string;
+  turnPort?: string;
+  turnUsername?: string;
+  turnCredential?: string;
+  turnEnabled?: boolean;
 }
 
 export interface CallRecord {

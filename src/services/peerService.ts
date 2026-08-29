@@ -13,19 +13,34 @@ export interface PeerConfiguration {
   };
 }
 
-// Default WebRTC STUN and TURN configurations for VoIP signaling
+// Default WebRTC STUN and TURN configurations for VoIP signaling across real networks
 export const DEFAULT_PEER_CONFIG: PeerConfiguration = {
   config: {
     iceServers: [
-      // 1. STUN Servers (Public IP discovery & NAT traversal)
+      // 1. Google & Twilio STUN Servers (Public IP discovery & NAT traversal)
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
       { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun4.l.google.com:19302' },
       { urls: 'stun:global.stun.twilio.com:3478' },
+      // 2. OpenRelay Global TURN Servers (Relay fallback for symmetric NAT / Firewalls)
+      {
+        urls: [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp',
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+      {
+        urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
     ],
-    iceTransportPolicy: 'all', // Attempt direct P2P first, fallback to TURN relay if configured
+    iceTransportPolicy: 'all', // Attempt direct P2P first, fallback to TURN relay
   },
 };
 
@@ -47,6 +62,64 @@ export class PeerService {
     if (typeof window !== 'undefined') {
       this.remoteAudioElement = new Audio();
       this.remoteAudioElement.autoplay = true;
+    }
+  }
+
+  public applyTurnConfig(turnSettings?: {
+    turnServerIp?: string;
+    turnPort?: string;
+    turnUsername?: string;
+    turnCredential?: string;
+    turnEnabled?: boolean;
+  }) {
+    const defaultStun = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+    ];
+
+    if (turnSettings && turnSettings.turnEnabled && turnSettings.turnServerIp) {
+      const host = turnSettings.turnServerIp.trim();
+      const port = turnSettings.turnPort?.trim() || '3478';
+      const username = turnSettings.turnUsername?.trim();
+      const credential = turnSettings.turnCredential?.trim();
+
+      const customIceServers: IceServerConfig[] = [
+        ...defaultStun,
+        { urls: `stun:${host}:${port}` },
+      ];
+
+      if (username && credential) {
+        customIceServers.push({
+          urls: [
+            `turn:${host}:${port}?transport=udp`,
+            `turn:${host}:${port}?transport=tcp`,
+          ],
+          username,
+          credential,
+        });
+
+        // Also add secure TURNS if on port 5349
+        customIceServers.push({
+          urls: `turns:${host}:5349?transport=tcp`,
+          username,
+          credential,
+        });
+      } else {
+        customIceServers.push({
+          urls: `turn:${host}:${port}`,
+        });
+      }
+
+      this.activeConfig = {
+        config: {
+          iceServers: customIceServers,
+          iceTransportPolicy: 'all',
+        },
+      };
+    } else {
+      this.activeConfig = DEFAULT_PEER_CONFIG;
     }
   }
 
@@ -97,6 +170,17 @@ export class PeerService {
           this.currentCall = mediaConnection;
           if (this.callbacks.onIncomingCall) {
             this.callbacks.onIncomingCall(mediaConnection);
+          }
+        });
+
+        peerInstance.on('disconnected', () => {
+          console.log('[PeerJS] Disconnected from server, reconnecting...');
+          try {
+            if (!peerInstance.destroyed) {
+              peerInstance.reconnect();
+            }
+          } catch (e) {
+            console.warn('[PeerJS] Reconnect attempt error:', e);
           }
         });
 

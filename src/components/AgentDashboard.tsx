@@ -89,11 +89,11 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-base font-semibold text-slate-200 tracking-tight flex items-center gap-1.5">
-                  <span>{config.companyName || 'CloudLine'}</span>
+                  <span>{config?.companyName || 'CloudTech Hotline'}</span>
                   <span className="text-blue-400 font-bold">Hotline Pro</span>
                 </h1>
                 <span className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] font-mono font-bold">
-                  Line: {config.hotlineDisplayNumber}
+                  Line: {config?.hotlineDisplayNumber || '19011'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
@@ -206,10 +206,10 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                   Incoming VoIP Call (مكالمة واردة)
                 </span>
                 <h2 className="text-3xl font-bold text-white font-mono tracking-tight">
-                  {incomingCall.hotlineNumber || config.hotlineDisplayNumber}
+                  {incomingCall.hotlineNumber || config?.hotlineDisplayNumber || '19011'}
                 </h2>
                 <p className="text-xs text-slate-400 font-medium">
-                  {config.companyName || 'Hotline Center'}
+                  {config?.companyName || 'Hotline Center'}
                 </p>
                 <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0F172A] border border-slate-700 text-[11px] text-slate-300">
                   <span>Line Tag:</span>
@@ -314,7 +314,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     Receiver Online • Waiting for Calls
                   </div>
                   <h3 className="text-2xl font-bold text-white tracking-tight mb-2">
-                    Line Ready: {config.hotlineDisplayNumber}
+                    Line Ready: {config?.hotlineDisplayNumber || '19011'}
                   </h3>
                   <p className="text-xs text-slate-400 max-w-md leading-relaxed mb-6 font-sans">
                     Receiver is active and listening for incoming customer WebRTC calls. When a customer dials the hotline, a ringing window will appear with one-click answer.
@@ -327,7 +327,7 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     </div>
                     <div className="p-3 rounded-xl bg-[#0F172A] border border-slate-700 text-left">
                       <span className="text-[10px] text-slate-500 block uppercase font-bold">Hotline Number</span>
-                      <span className="text-xs font-mono font-bold text-white">{config.hotlineDisplayNumber}</span>
+                      <span className="text-xs font-mono font-bold text-white">{config?.hotlineDisplayNumber || '19011'}</span>
                     </div>
                   </div>
                 </div>

@@ -50,12 +50,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     }
   }, []);
 
-  const currentHotline = selectedCompany?.hotline || config.hotlineDisplayNumber;
-  const currentCompanyName = selectedCompany?.name || config.companyName;
-  const currentWhatsApp = selectedCompany?.whatsapp || config.whatsappNumber;
+  const currentHotline = selectedCompany?.hotline || config?.hotlineDisplayNumber || DEFAULT_COMPANIES[0].hotline;
+  const currentCompanyName = selectedCompany?.name || config?.companyName || DEFAULT_COMPANIES[0].name;
+  const currentWhatsApp = selectedCompany?.whatsapp || config?.whatsappNumber || DEFAULT_COMPANIES[0].whatsapp;
 
   // Dynamic WhatsApp Direct link
-  const whatsappUrl = `https://wa.me/${currentWhatsApp}?text=${encodeURIComponent(config.whatsappDefaultMsg || `مرحباً، أود الاستفسار من خدمة عملاء ${currentCompanyName}.`)}`;
+  const whatsappUrl = `https://wa.me/${currentWhatsApp}?text=${encodeURIComponent(config?.whatsappDefaultMsg || `مرحباً، أود الاستفسار من خدمة عملاء ${currentCompanyName}.`)}`;
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-slate-100 flex flex-col justify-between relative overflow-hidden" id="customer-portal-view">

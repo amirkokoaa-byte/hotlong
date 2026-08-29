@@ -46,6 +46,11 @@ export const DEFAULT_CONFIG: SystemConfig = {
   masterPassword: '0000',
   workingHours: '24/7 Available (Real-time WebRTC)',
   supportEmail: 'support@cloudtech-hotline.com',
+  turnServerIp: '',
+  turnPort: '3478',
+  turnUsername: 'hotline_user',
+  turnCredential: 'ComplexPassword123!',
+  turnEnabled: false,
 };
 
 // IndexedDB Helper
