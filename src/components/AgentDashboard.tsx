@@ -71,6 +71,35 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'console' | 'chat'>('console');
   const [lastSavedRecord, setLastSavedRecord] = useState<CallRecord | null>(null);
 
+  // Audio Input Devices Management
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMicrophone, setSelectedMicrophone] = useState<string>('');
+
+  const fetchAudioDevices = async () => {
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const microphones = devices.filter((d) => d.kind === 'audioinput');
+        setAudioDevices(microphones);
+        if (microphones.length > 0 && !selectedMicrophone) {
+          setSelectedMicrophone(microphones[0].deviceId);
+        }
+      }
+    } catch (err) {
+      console.warn('Error enumerating audio devices:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAudioDevices();
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', fetchAudioDevices);
+      return () => {
+        navigator.mediaDevices.removeEventListener('devicechange', fetchAudioDevices);
+      };
+    }
+  }, []);
+
   const isCallActive = activeCall && (activeCall.status === 'connected' || activeCall.status === 'dialing' || activeCall.status === 'ringing');
 
   return (
@@ -105,6 +134,25 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({
           {/* Action Bar */}
           <div className="flex items-center gap-3">
             
+            {/* Microphone Selector Pill */}
+            {audioDevices.length > 0 && (
+              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs">
+                <Mic className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <select
+                  value={selectedMicrophone}
+                  onChange={(e) => setSelectedMicrophone(e.target.value)}
+                  className="bg-transparent text-slate-200 text-[11px] focus:outline-none cursor-pointer max-w-[140px] truncate"
+                  title="الميكروفون المستخدم للمكالمات"
+                >
+                  {audioDevices.map((dev, idx) => (
+                    <option key={dev.deviceId || idx} value={dev.deviceId} className="bg-[#1E293B] text-white">
+                      {dev.label || `Microphone ${idx + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Agent Status Toggle */}
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${isReady ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`} />

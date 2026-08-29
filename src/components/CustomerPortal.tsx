@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, MessageSquare, ExternalLink, Headphones, ShieldCheck, Clock, Radio, ChevronRight, Sparkles, Building2, CheckCircle2, Shield, ArrowRight } from 'lucide-react';
+import { Phone, MessageSquare, ExternalLink, Headphones, ShieldCheck, Clock, Radio, ChevronRight, Sparkles, Building2, CheckCircle2, Shield, ArrowRight, Mic, RefreshCw } from 'lucide-react';
 import { SystemConfig, ActiveCallState, CompanyProfile } from '../types';
 import { DEFAULT_COMPANIES } from '../services/storage';
 import { VoiceCallModal } from './VoiceCallModal';
@@ -32,8 +32,32 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const [companies, setCompanies] = useState<CompanyProfile[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<CompanyProfile | null>(null);
 
+  // Audio Device Selection
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMicrophone, setSelectedMicrophone] = useState<string>('');
+
+  const fetchAudioDevices = async () => {
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const microphones = devices.filter((d) => d.kind === 'audioinput');
+        setAudioDevices(microphones);
+        if (microphones.length > 0 && !selectedMicrophone) {
+          setSelectedMicrophone(microphones[0].deviceId);
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching audio devices in customer view:', err);
+    }
+  };
+
   // Load companies from LocalStorage
   useEffect(() => {
+    fetchAudioDevices();
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', fetchAudioDevices);
+    }
+
     try {
       const saved = JSON.parse(localStorage.getItem('app_companies') || '[]');
       if (saved.length > 0) {
@@ -48,6 +72,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
       setCompanies(DEFAULT_COMPANIES);
       setSelectedCompany(DEFAULT_COMPANIES[0]);
     }
+
+    return () => {
+      if (navigator.mediaDevices && navigator.mediaDevices.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', fetchAudioDevices);
+      }
+    };
   }, []);
 
   const currentHotline = selectedCompany?.hotline || config?.hotlineDisplayNumber || DEFAULT_COMPANIES[0].hotline;
@@ -187,15 +217,47 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 </select>
 
                 {selectedCompany && (
-                  <div className="mt-3.5 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>الخط الساخن متصل ومستعد للاستقبال</span>
+                  <div className="mt-3.5 pt-3 border-t border-slate-700/60 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>الخط الساخن متصل ومستعد للاستقبال</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-300 font-mono font-bold bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+                        <span>رقم الهوت لاين:</span>
+                        <span className="text-blue-400">{selectedCompany.hotline}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 text-slate-300 font-mono font-bold bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
-                      <span>رقم الهوت لاين:</span>
-                      <span className="text-blue-400">{selectedCompany.hotline}</span>
-                    </div>
+
+                    {/* Microphone input selection */}
+                    {audioDevices.length > 0 && (
+                      <div className="flex items-center justify-between bg-slate-800/60 p-2 rounded-xl border border-slate-700/80">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <Mic className="w-3.5 h-3.5 text-blue-400" />
+                          <span>الميكروفون المستخدم:</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={selectedMicrophone}
+                            onChange={(e) => setSelectedMicrophone(e.target.value)}
+                            className="bg-[#0F172A] text-slate-200 text-xs px-2 py-1 rounded border border-slate-700 focus:outline-none max-w-[200px] truncate"
+                          >
+                            {audioDevices.map((dev, idx) => (
+                              <option key={dev.deviceId || idx} value={dev.deviceId}>
+                                {dev.label || `ميكروفون ${idx + 1}`}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={fetchAudioDevices}
+                            title="تحديث الأجهزة المتصلة"
+                            className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

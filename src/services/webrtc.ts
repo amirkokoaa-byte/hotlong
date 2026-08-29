@@ -10,6 +10,20 @@ const ICE_SERVERS: RTCConfiguration = {
   ],
 };
 
+export function formatMicrophoneError(err: any): string {
+  if (!err) return 'خطأ غير معروف في الوصول للميكروفون';
+  if (err.name === 'NotFoundError' || (err.message && err.message.includes('Requested device not found')) || (err.message && err.message.includes('device not found'))) {
+    return 'لم يتم العثور على ميكروفون متصل بالجهاز! يرجى توصيل سماعة أو ميكروفون والمحاولة مرة أخرى.';
+  }
+  if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || (err.message && err.message.includes('Permission denied'))) {
+    return 'تم رفض صلاحية استخدام الميكروفون من قبل المتصفح!';
+  }
+  if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+    return 'الميكروفون قيد الاستخدام بواسطة تطبيق آخر!';
+  }
+  return 'خطأ في الوصول للميكروفون: ' + (err.message || err.toString());
+}
+
 export class WebRTCService {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
@@ -48,31 +62,44 @@ export class WebRTCService {
     }
   }
 
-  // Acquire local microphone
-  async getLocalUserMedia(): Promise<MediaStream> {
-    if (this.localStream && this.localStream.active) {
+  // Acquire local microphone with dedicated error detection and optional deviceId selection
+  async getLocalUserMedia(deviceId?: string): Promise<MediaStream> {
+    if (this.localStream && this.localStream.active && !deviceId) {
       return this.localStream;
     }
 
     try {
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+        sampleRate: 48000,
+      };
+
+      if (deviceId) {
+        audioConstraints.deviceId = { exact: deviceId };
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-          sampleRate: 48000,
-        },
+        audio: audioConstraints,
         video: false,
       });
+
+      // Stop previous local stream if switching devices
+      if (this.localStream && this.localStream !== stream) {
+        this.localStream.getTracks().forEach((t) => t.stop());
+      }
 
       this.localStream = stream;
       this.setupLocalAnalyser(stream);
       return stream;
     } catch (err: unknown) {
-      const error = err as Error;
-      console.error('Error accessing microphone:', error);
-      throw new Error(`Microphone access failed: ${error.message || 'Permission denied'}`);
+      const friendlyMessage = formatMicrophoneError(err);
+      console.error('Error accessing microphone:', err);
+      const errorObj = new Error(friendlyMessage);
+      (errorObj as any).originalError = err;
+      throw errorObj;
     }
   }
 

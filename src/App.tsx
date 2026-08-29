@@ -285,7 +285,7 @@ function HotlineAppContent() {
     } catch (err: unknown) {
       const error = err as Error;
       soundEffects.stopRingbackTone();
-      alert(`Could not start voice call: ${error.message || 'Check microphone permissions'}`);
+      alert(error.message || 'تعذر بدء المكالمة الصوتية: يرجى التأكد من صلاحية الميكروفون وتوصيله.');
       setCustomerCall(null);
     }
   };
@@ -365,7 +365,7 @@ function HotlineAppContent() {
     } catch (err: unknown) {
       const error = err as Error;
       console.error('Error answering call:', error);
-      alert(`Failed to connect incoming call: ${error.message}`);
+      alert(error.message || 'فشل الرد على المكالمة الواردة: تعذر الوصول للميكروفون.');
       handleRejectIncomingCall();
     }
   };
