@@ -1,0 +1,10 @@
+{
+  "name": "Cloud Hotline Call Center",
+  "description": "Production-ready VoIP cloud hotline system with WebRTC peer-to-peer browser voice calling, real-time agent dashboard, live chat, WhatsApp redirection, caller ID, and call notepad persistence.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
